@@ -1,0 +1,11 @@
+{
+    "python.formatting.provider": "black",
+    "python.pythonPath": "D:\\Software\\Python37\\python.exe",
+    "files.associations": {
+        "bitset": "c",
+        "chrono": "c",
+        "xhash": "c",
+        "xtree": "c",
+        "xutility": "c"
+    }
+}
