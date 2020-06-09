@@ -208,7 +208,7 @@ void write_wav(int16_t *data, size_t len, const char *name) {
     int out_fd = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
     if (out_fd == -1) {
         perror("unable to open filtered file");
-        return 1;
+        return;
     }
     if (write(out_fd, wave_header, sizeof(wave_header)) == -1) {
         perror("error");
@@ -219,17 +219,17 @@ void write_wav(int16_t *data, size_t len, const char *name) {
     close(out_fd);
 }
 
-void write_wav_stereo(int16_t *left, int16_t *right, size_t len,
+void write_wav_stereo(int16_t *left, int16_t *right, unsigned int len,
                       const char *name) {
     int out_fd = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
     if (out_fd == -1) {
         perror("unable to open filtered file");
-        return 1;
+        return;
     }
     if (write(out_fd, wave_header, sizeof(wave_header)) == -1) {
         perror("error");
     }
-    for (int i = 0; i < len; i++) {
+    for (unsigned int i = 0; i < len; i++) {
         if (write(out_fd, &(left[i]), 2) == -1) {
             perror("error");
         }
@@ -244,7 +244,6 @@ void filter_u16(int16_t *src, int16_t *dest, size_t count) {
     arm_fir_instance_f32 fir;
     float32_t carrier[SAMPLES_PER_PERIOD];
     float32_t phase = 0;
-    int16_t buf[SAMPLES_PER_PERIOD];
 
     // // Generate a carrier tone
     // make_carrier(carrier, SAMPLES_PER_PERIOD, CARRIER_TONE, SAMPLE_RATE);
