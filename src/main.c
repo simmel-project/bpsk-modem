@@ -221,23 +221,29 @@ void write_wav(int16_t *data, size_t len, const char *name) {
 
 void write_wav_stereo(int16_t *left, int16_t *right, unsigned int len,
                       const char *name) {
-    int out_fd = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
-    if (out_fd == -1) {
+    FILE *output = fopen(name, "w+b");
+    if (!output) {
         perror("unable to open filtered file");
         return;
     }
-    if (write(out_fd, wave_header, sizeof(wave_header)) == -1) {
+    if (fwrite(wave_header, sizeof(wave_header), 1, output) <= 0) {
         perror("error");
+        fclose(output);
+        return;
     }
     for (unsigned int i = 0; i < len; i++) {
-        if (write(out_fd, &(left[i]), 2) == -1) {
+        if (fwrite(&(left[i]), 2, 1, output) != 1) {
             perror("error");
+            fclose(output);
+            return;
         }
-        if (write(out_fd, &(right[i]), 2) == -1) {
+        if (fwrite(&(right[i]), 2, 1, output) != 1) {
             perror("error");
+            fclose(output);
+            return;
         }
     }
-    close(out_fd);
+    fclose(output);
 }
 
 void filter_u16(int16_t *src, int16_t *dest, size_t count) {
