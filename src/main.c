@@ -378,6 +378,7 @@ int main(int argc, char **argv) {
     int samplerate = *((unsigned int *)&(wave_header[24]));
     printf("samplerate: %d\n", samplerate);
 
+#if 0    
     // double the sampling rate through interpolation and filtering
     baselen = baselen * 2;
     wave_upsampled = malloc(baselen * sizeof(int16_t));
@@ -410,12 +411,37 @@ int main(int argc, char **argv) {
     }
 
     write_wav(wave_upsampled_filtered, baselen, "upsampled_filtered.wav");
+#else
+    // double the sampling rate through interpolation and filtering
+    wave_filtered = malloc(baselen * sizeof(int16_t));
 
+    memset(wave_filtered, 0, baselen * sizeof(int16_t));
+
+    arm_fir_instance_f32 fir;
+    arm_fir_init_f32(&fir, FIR_STAGES, fir_coefficients, fir_state,
+                     SAMPLES_PER_PERIOD);
+    for (int sample_offset = 0; sample_offset < baselen;
+         sample_offset += SAMPLES_PER_PERIOD) {
+        // Apply our bandpass filter
+        float32_t firwindow[SAMPLES_PER_PERIOD];
+        arm_q15_to_float(&(wave_buffer[sample_offset]), firwindow,
+                         SAMPLES_PER_PERIOD);
+        static float32_t filtered_samples[SAMPLES_PER_PERIOD];
+        arm_fir_f32(&fir, firwindow, filtered_samples, SAMPLES_PER_PERIOD);
+        arm_float_to_q15(filtered_samples,
+                         &(wave_filtered[sample_offset]),
+                         SAMPLES_PER_PERIOD);
+    }
+
+    write_wav(wave_filtered, baselen, "bpsk_filtered.wav");
+#endif
+    
     // now try to run a PLL to "lock" onto the signal
     nco_st.samplerate = (float32_t)samplerate;
     nco_st.freq = 1000.00;
     nco_st.phase = 0.0;
 
+#if 0    
     /////// test the NCO
     int16_t *i_int;
     int16_t *q_int;
@@ -441,14 +467,29 @@ int main(int argc, char **argv) {
         4; // *4 because we forgot to expand it when we doubled sample rate
     write_wav_stereo(i_int, q_int, baselen, "quadrature.wav");
     ///////
+#else
+    wave_header[22] = 2; // stereo
+    uint32_t byterate = *((uint32_t *)&(wave_header[28]));
+    *((uint32_t *)&(wave_header[28])) = byterate * 2;
+    uint32_t length = *((uint32_t *)&(wave_header[40]));
+    *((uint32_t *)&(wave_header[40])) =
+        length * 2; 
+#endif
 
     // multiply the NCO output times input signal
+    int16_t *input;
+    input = wave_filtered;
     int16_t *i_loop;
     int16_t *q_loop;
     i_loop = malloc(baselen * sizeof(int16_t));
     q_loop = malloc(baselen * sizeof(int16_t));
     memset(i_loop, 0, baselen);
     memset(q_loop, 0, baselen);
+
+    // we need to do an AGC...
+    for(int i = 0; i < baselen; i++ ) {
+      input[i] = input[i] * 10; // note: don't add gain if we don't pre-filter!
+    }
 
     arm_fir_instance_f32 i_lpf;
     arm_fir_instance_f32 q_lpf;
@@ -461,7 +502,7 @@ int main(int argc, char **argv) {
          sample_offset += SAMPLES_PER_PERIOD) {
 
         float32_t loopwindow[SAMPLES_PER_PERIOD];
-        arm_q15_to_float(&(wave_upsampled_filtered[sample_offset]), loopwindow,
+        arm_q15_to_float(&(input[sample_offset]), loopwindow,
                          SAMPLES_PER_PERIOD);
 
         float32_t i_samps[SAMPLES_PER_PERIOD];
@@ -500,7 +541,7 @@ int main(int argc, char **argv) {
         // printf("err: %0.04f\n", nco_error);
 
         static float bit_pll = 0;
-        static const float pll_incr = (31.25f / 22050.0f);
+        static const float pll_incr = (31.25f / 11025.0f);
         for (unsigned int j = 0; j < SAMPLES_PER_PERIOD; j++) {
             if (bit_pll < 0.5 && (bit_pll + pll_incr) >= 0.5) {
                 static int bit_acc = 0;

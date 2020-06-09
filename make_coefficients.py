@@ -49,8 +49,8 @@ def bandpass_remez(ntaps, lowcut, highcut, fs, width):
     return taps
 
 
-taps = 256
-rate = 11025*2
+taps = 32
+rate = 11025
 tone = 1000
 bandwidth = 500
 coefficients = create_filter(rate=rate, tone=tone, bandwidth=bandwidth, taps=taps, window="hamming")
