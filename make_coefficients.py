@@ -3,9 +3,9 @@
 import numpy
 from scipy.signal import firwin, remez, kaiser_atten, kaiser_beta
 
-taps=7
+taps=5
 rate=62500
-bandwidth=15000
+bandwidth=18000
 
 coefficients = firwin(
         numtaps=taps,
