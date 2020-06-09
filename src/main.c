@@ -492,6 +492,28 @@ int main(int argc, char **argv) {
         avg /= ((float32_t)SAMPLES_PER_PERIOD);
         nco_error = -(avg);
         // printf("err: %0.04f\n", nco_error);
+
+        static float bit_pll = 0;
+        static const float pll_incr = (31.25f / 22050.0f);
+        for (unsigned int j = 0; j < SAMPLES_PER_PERIOD; j++) {
+            if (bit_pll < 0.5 && (bit_pll + pll_incr) >= 0.5) {
+                static int bit_acc = 0;
+                static int last_state = 0;
+                int state = i_lpf_samples[j] > 0.0;
+                int bit = !(state ^ last_state);
+                last_state = state;
+
+                bit_acc = (bit_acc << 1) | bit;
+                if ((bit_acc & 3) == 0) {
+                    print_char(bit_acc);
+                    bit_acc = 0;
+                }
+            }
+            bit_pll += pll_incr;
+            if (bit_pll >= 1) {
+                bit_pll -= 1;
+            }
+        }
     }
     printf("\n");
     write_wav_stereo(i_loop, q_loop, baselen, "quadrature_loop.wav");
