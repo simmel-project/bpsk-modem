@@ -50,9 +50,9 @@ def bandpass_remez(ntaps, lowcut, highcut, fs, width):
 
 
 taps = 16
-rate = 11025
-tone = 1000
-bandwidth = 50
+rate = 62500
+tone = 20840
+bandwidth = 20
 coefficients = create_filter(rate=rate, tone=tone, bandwidth=bandwidth, taps=taps, window="hamming")
 # coefficients = bandpass_remez(taps, (1000 - bandwidth / 2), (1000 + bandwidth / 2), rate, 1.0)
 # coefficients = bandpass_kaiser(taps, (1000 - bandwidth / 2), (1000 + bandwidth / 2), rate, 1.0)
@@ -64,7 +64,7 @@ print(
 // tone: {}
 // bandwidth: {}
 #define LPF_STAGES {}
-static float lpf_coefficients[FIR_STAGES] = {{""".format(
+static float lpf_coefficients[LPF_STAGES] = {{""".format(
         taps, rate, tone, bandwidth, taps
     )
 )

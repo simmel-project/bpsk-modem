@@ -11,9 +11,9 @@
 #include "arm_math.h"
 #include "modulate.h"
 
-#define SAMPLE_RATE 11025
-#define CARRIER_TONE 1000
-#define BAUD_RATE (31.25f)
+#define SAMPLE_RATE 62500
+#define CARRIER_TONE 20840
+#define BAUD_RATE (651.0f) // 31.25
 #define PLL_INCR (BAUD_RATE / (float)(SAMPLE_RATE))
 
 #define SAMPLES_PER_PERIOD 20 // Must evenly divide CARRIER_TONE
@@ -28,182 +28,16 @@ const float detection_threshold = 1800000.0f; // 0.18f
 #include "lpf_coefficients.h"
 
 static float fir_state[SAMPLES_PER_PERIOD + FIR_STAGES - 1];
-static float i_lpf_state[SAMPLES_PER_PERIOD + FIR_STAGES - 1];
-static float q_lpf_state[SAMPLES_PER_PERIOD + FIR_STAGES - 1];
+static float i_lpf_state[SAMPLES_PER_PERIOD + LPF_STAGES - 1];
+static float q_lpf_state[SAMPLES_PER_PERIOD + LPF_STAGES - 1];
 
 uint8_t wave_header[44];
-
-// uint8_t decoder(uint16_t data, uint8_t enable) {
-//     uint8_t result = data & 0x00ff;
-//     if (enable) {
-//         uint8_t h[5];
-//         h[0] = (data ^ (data >> 1) ^ (data >> 3) ^ (data >> 5) ^ (data >> 7)
-//         ^
-//                 (data >> 8)) &
-//                0x0001;
-//         h[1] = (data ^ (data >> 2) ^ (data >> 3) ^ (data >> 6) ^ (data >> 7)
-//         ^
-//                 (data >> 9)) &
-//                0x0001;
-//         h[2] = (data ^ (data >> 4) ^ (data >> 5) ^ (data >> 6) ^ (data >> 7)
-//         ^
-//                 (data >> 10)) &
-//                0x0001;
-//         h[3] = ((data >> 1) ^ (data >> 2) ^ (data >> 3) ^ (data >> 4) ^
-//                 (data >> 5) ^ (data >> 6) ^ (data >> 7) ^ (data >> 11)) &
-//                0x0001;
-//         h[4] = (data ^ (data >> 1) ^ (data >> 2) ^ (data >> 3) ^ (data >> 4)
-//         ^
-//                 (data >> 5) ^ (data >> 6) ^ (data >> 7) ^ (data >> 8) ^
-//                 (data >> 9) ^ (data >> 10) ^ (data >> 11) ^ (data >> 12)) &
-//                0x0001;
-//         uint8_t checkData = ((h[4] & !h[3] & h[2] & h[1] & h[0]) |
-//                              ((h[4] & h[3] & !h[2] & !h[1] & h[0]) << 1) |
-//                              ((h[4] & h[3] & !h[2] & h[1] & !h[0]) << 2) |
-//                              ((h[4] & h[3] & !h[2] & h[1] & h[0]) << 3) |
-//                              ((h[4] & h[3] & h[2] & !h[1] & !h[0]) << 4) |
-//                              ((h[4] & h[3] & h[2] & !h[1] & h[0]) << 5) |
-//                              ((h[4] & h[3] & h[2] & h[1] & !h[0]) << 6) |
-//                              ((h[4] & h[3] & h[2] & h[1] & h[0]) << 7));
-//         result = result ^ checkData;
-//     }
-//     return result;
-// }
-
-float make_carrier(float *carrier, size_t count, float freq, float sample_rate,
-                   float32_t phase) {
-    size_t i = 0;
-    float32_t omega = 2.0 * M_PI * freq / sample_rate;
-    for (i = 0; i < count; i++) {
-        carrier[i] = sinf(phase);
-        phase += omega;
-    }
-    return phase;
-}
 
 extern char varcode_to_char(uint32_t c);
 static void print_char(uint32_t c) {
     printf("%c", varcode_to_char(c >> 2));
 }
 
-void demodulate_u16(int16_t *samples, size_t count) {
-    arm_fir_instance_f32 fir;
-    float32_t carrier[SAMPLES_PER_PERIOD];
-    float32_t phase = 0;
-    unsigned int j;
-
-    // int iter;
-    // int16_t s_max = 0;
-    // int16_t s_min = 0;
-    // for (iter = 0; iter < count; iter++) {
-    //     if (samples[iter] > s_max) {
-    //         s_max = samples[iter];
-    //     }
-    //     if (samples[iter] < s_min) {
-    //         s_min = samples[iter];
-    //     }
-    // }
-    // printf("MAX: %d  MIN: %d\n", s_max, s_min);
-
-    arm_fir_init_f32(&fir, FIR_STAGES, fir_coefficients, fir_state,
-                     SAMPLES_PER_PERIOD);
-
-    int last_state = 0;
-    size_t sample_offset;
-
-    // clear();
-    int sample_count = 0;
-
-    float bit_pll = 0.6;
-
-    float32_t demodulated[SAMPLES_PER_PERIOD];
-    float32_t test_input[SAMPLES_PER_PERIOD];
-    float32_t filtered_samples[SAMPLES_PER_PERIOD];
-    float32_t *output;
-    float32_t prev_bit = 0;
-    float32_t prev_prev_bit = 0;
-
-    int bit_acc = 0;
-
-    for (sample_offset = 0; sample_offset < count;
-         sample_offset += SAMPLES_PER_PERIOD) {
-
-        phase = make_carrier(carrier, SAMPLES_PER_PERIOD, CARRIER_TONE,
-                             SAMPLE_RATE, phase);
-
-        // Convert this series of samples from int16_t (aka q15) to
-        // float.
-        arm_q15_to_float(&samples[sample_offset], test_input,
-                         SAMPLES_PER_PERIOD);
-
-        if (1) {
-            // Perform coherent demodulation
-            arm_mult_f32(test_input, carrier, demodulated, SAMPLES_PER_PERIOD);
-
-            // Apply our bandpass filter
-            arm_fir_f32(&fir, demodulated, filtered_samples,
-                        SAMPLES_PER_PERIOD);
-            output = filtered_samples;
-        } else {
-            // Apply our bandpass filter
-            float32_t filtered_samples[SAMPLES_PER_PERIOD];
-            arm_fir_f32(&fir, test_input, filtered_samples, SAMPLES_PER_PERIOD);
-
-            // Perform coherent demodulation
-            float32_t demodulated[SAMPLES_PER_PERIOD];
-            arm_mult_f32(filtered_samples, carrier, demodulated,
-                         SAMPLES_PER_PERIOD);
-            output = demodulated;
-        }
-
-        for (j = 0; j < SAMPLES_PER_PERIOD; j++) {
-
-            if (bit_pll < 0.5 && (bit_pll + PLL_INCR) >= 0.5) {
-                float32_t sum = output[j] + prev_bit + prev_prev_bit;
-                int state = (sum) < 0.0;
-                int bit = !(state ^ last_state);
-                last_state = state;
-
-                bit_acc = (bit_acc << 1) | bit;
-                if ((bit_acc & 3) == 0) {
-                    print_char(bit_acc);
-                    bit_acc = 0;
-                }
-            }
-            // printf(fmt, output[j]);
-            bit_pll += PLL_INCR;
-            if (bit_pll >= 1) {
-                bit_pll -= 1;
-                // printf(" samples: %d\n B:", sample_count);
-                sample_count = 0;
-            } else {
-                sample_count++;
-            }
-
-            prev_prev_bit = prev_bit;
-            prev_bit = output[j];
-            // int this_sample =
-            //     ((demodulated[j * OVERSAMPLE] < THRESHOLD) ? 0x01 :
-            //     0x00);
-            // int bit = 1;
-            // if (this_sample != last_sample) {
-            //     bit = 0;
-            // }
-            // last_sample = this_sample;
-            // fec_data_old |= bit << j;
-            // printf("%d", bit);
-        }
-        // fec_data_new |=
-        //     (fec_data_old
-        //      << 10); // for 11.5 phase delay, when using 24-stage FIR
-        // printf("  FEC data: %04x ", fec_data_new);
-
-        // recovered_data[i] = decoder(fec_data_new, 1);
-        // printf(" Recovered: %02x\n", recovered_data[i]);
-    }
-    printf("\n");
-    return;
-}
 
 void write_wav(int16_t *data, size_t len, const char *name) {
     int out_fd = open(name, O_WRONLY | O_CREAT | O_TRUNC, 0777);
@@ -247,66 +81,6 @@ void write_wav_stereo(int16_t *left, int16_t *right, unsigned int len,
     fclose(output);
 }
 
-void filter_u16(int16_t *src, int16_t *dest, size_t count) {
-    arm_fir_instance_f32 fir;
-    float32_t carrier[SAMPLES_PER_PERIOD];
-    float32_t phase = 0;
-
-    // // Generate a carrier tone
-    // make_carrier(carrier, SAMPLES_PER_PERIOD, CARRIER_TONE, SAMPLE_RATE);
-
-    arm_fir_init_f32(&fir, FIR_STAGES, fir_coefficients, fir_state,
-                     SAMPLES_PER_PERIOD);
-
-    size_t sample_offset;
-
-    for (sample_offset = 0; (sample_offset + SAMPLES_PER_PERIOD) < count;
-         sample_offset += SAMPLES_PER_PERIOD) {
-        phase = make_carrier(carrier, SAMPLES_PER_PERIOD, CARRIER_TONE,
-                             SAMPLE_RATE, phase);
-
-        // arm_float_to_q15(carrier, dest, SAMPLES_PER_PERIOD);
-        // dest += SAMPLES_PER_PERIOD;
-        // continue;
-
-        // Convert this series of samples from int16_t (aka q15) to float.
-        float32_t test_input[SAMPLES_PER_PERIOD];
-        float32_t test_input_2[SAMPLES_PER_PERIOD];
-        arm_q15_to_float(src, test_input, SAMPLES_PER_PERIOD);
-        arm_q15_to_float(src + 1, test_input_2, SAMPLES_PER_PERIOD);
-        src += SAMPLES_PER_PERIOD;
-        // arm_mult_f32(test_input, test_input_2, test_input, SAMPLES_PER_PERIOD);
-
-        float32_t *output;
-
-        if (1) {
-            // Perform coherent demodulation
-            static float32_t demodulated[SAMPLES_PER_PERIOD];
-            arm_mult_f32(test_input, carrier, demodulated, SAMPLES_PER_PERIOD);
-
-            // Apply our bandpass filter
-            static float32_t filtered_samples[SAMPLES_PER_PERIOD];
-            arm_fir_f32(&fir, demodulated, filtered_samples,
-                        SAMPLES_PER_PERIOD);
-            output = filtered_samples;
-        } else {
-            // Apply our bandpass filter
-            static float32_t filtered_samples[SAMPLES_PER_PERIOD];
-            arm_fir_f32(&fir, test_input, filtered_samples, SAMPLES_PER_PERIOD);
-
-            // Perform coherent demodulation
-            static float32_t demodulated[SAMPLES_PER_PERIOD];
-            arm_mult_f32(filtered_samples, carrier, demodulated,
-                         SAMPLES_PER_PERIOD);
-            output = demodulated;
-        }
-
-        arm_float_to_q15(output, dest, SAMPLES_PER_PERIOD);
-        dest += SAMPLES_PER_PERIOD;
-    }
-    return;
-}
-
 struct nco_state {
     float32_t samplerate; // Hz
     float32_t freq;       // Hz
@@ -346,12 +120,13 @@ static void modulate(char *filename) {
         0x01, 0x00, 0x11, 0x2b, 0x00, 0x00, 0x22, 0x56, 0x00, 0x00, 0x02,
         0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0xf8, 0x11, 0x05, 0x00,
     };
-    uint32_t rate = 11025;
-    uint32_t tone = 1000; // rate / 3;
+    uint32_t rate = SAMPLE_RATE;
+    uint32_t tone = CARRIER_TONE; // rate / 3;
     memcpy(&wav_header[24], &rate, sizeof(rate));
+    *((uint32_t *)&(wav_header[40])) = 841939;
     fwrite(wav_header, sizeof(wav_header), 1, wav);
 
-    modulate_init(&state, tone, rate, 1 /* unimplemented */, append_wav, wav);
+    modulate_init(&state, tone, rate, 1.0 /* unimplemented */, append_wav, wav);
     modulate_string(&state, "\
 Four score and seven years ago, our fathers brought forth on this continent a new nation: conceived in liberty, and dedicated to the proposition that all men are created equal.\
 \n\
@@ -454,10 +229,13 @@ int main(int argc, char **argv) {
 
     write_wav(wave_upsampled_filtered, baselen, "upsampled_filtered.wav");
 #else
-    // double the sampling rate through interpolation and filtering
+    // apply the BPF
     wave_filtered = malloc(baselen * sizeof(int16_t));
 
     memset(wave_filtered, 0, baselen * sizeof(int16_t));
+    //for(int i = 0; i < FIR_STAGES; i++) {
+    //  printf("%0.003f\n", fir_coefficients[i]);
+    //}
 
     arm_fir_instance_f32 fir;
     arm_fir_init_f32(&fir, FIR_STAGES, fir_coefficients, fir_state,
@@ -480,7 +258,7 @@ int main(int argc, char **argv) {
     
     // now try to run a PLL to "lock" onto the signal
     nco_st.samplerate = (float32_t)samplerate;
-    nco_st.freq = 1000.00;
+    nco_st.freq = (float32_t)CARRIER_TONE;
     nco_st.phase = 0.0;
 
 #if 0    
@@ -515,12 +293,13 @@ int main(int argc, char **argv) {
     *((uint32_t *)&(wave_header[28])) = byterate * 2;
     uint32_t length = *((uint32_t *)&(wave_header[40]));
     *((uint32_t *)&(wave_header[40])) =
-        length * 2; 
+        length * 2;
+    printf("wave length: %d\n");
 #endif
 
     // multiply the NCO output times input signal
     int16_t *input;
-    input = wave_filtered;
+    input = wave_filtered;  // wave_buffer if not filtered, wave_filtered if filtered
     int16_t *i_loop;
     int16_t *q_loop;
     i_loop = malloc(baselen * sizeof(int16_t));
@@ -603,7 +382,7 @@ int main(int argc, char **argv) {
         // printf("err: %0.04f\n", nco_error);
 
         static float bit_pll = 0;
-        static const float pll_incr = (31.25f / 11025.0f);
+        static const float pll_incr = (BAUD_RATE / (float)SAMPLE_RATE);
         for (unsigned int j = 0; j < SAMPLES_PER_PERIOD; j++) {
             if (bit_pll < 0.5 && (bit_pll + pll_incr) >= 0.5) {
                 static int bit_acc = 0;

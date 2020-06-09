@@ -7,7 +7,7 @@
 const char *char_to_varcode(char c);
 
 void modulate_init(struct modulate_state *state, uint32_t carrier,
-                   uint32_t rate, uint32_t baud,
+                   uint32_t rate, float baud,
                    void (*write)(void *arg, void *data, unsigned int count),
                    void *arg) {
     state->cfg.rate = rate;

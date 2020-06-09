@@ -4,7 +4,7 @@
 struct modulate_cfg {
     uint32_t rate;
     uint32_t carrier;
-    uint32_t baud;
+    float baud;
     float pll_incr;
     void (*write)(void *arg, void *data, unsigned int count);
     void *write_arg;
@@ -19,7 +19,7 @@ struct modulate_state {
 };
 
 void modulate_init(struct modulate_state *state, uint32_t carrier,
-                   uint32_t rate, uint32_t baud,
+                   uint32_t rate, float baud,
                    void (*write)(void *arg, void *data, unsigned int count),
                    void *arg);
 void modulate_string(struct modulate_state *state, const char *string);
