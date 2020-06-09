@@ -74,3 +74,11 @@ for (k,v) in decode.items():
 print("    }")
 print("    return '\\0';")
 print("}")
+print("")
+print("const char *char_to_varcode(char c) {")
+print("    switch (c) {")
+for (k,v) in decode.items():
+    print("        case '{}': return \"{}\";".format(v, k))
+print("    }")
+print("    return \"\";")
+print("}")
