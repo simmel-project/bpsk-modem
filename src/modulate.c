@@ -24,8 +24,8 @@ void modulate_init(struct modulate_state *state, uint32_t carrier,
 }
 
 static void send_bit(struct modulate_state *state, int bit) {
-    int16_t low = -32768;
-    int16_t high = 32767;
+    int16_t low = -32768/4;
+    int16_t high = 32767/4;
     int sign = 1;
 
     printf("%d", bit);
@@ -33,8 +33,8 @@ static void send_bit(struct modulate_state *state, int bit) {
     state->polarity ^= !bit;
     if (state->polarity) {
         sign = -1;
-        low = 32767;
-        high = -32768;
+        low = 32767/4;
+        high = -32768/4;
     }
 
     int bit_count = 0;
