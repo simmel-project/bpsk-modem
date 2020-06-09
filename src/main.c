@@ -528,10 +528,10 @@ int main(int argc, char **argv) {
     memset(i_loop, 0, baselen);
     memset(q_loop, 0, baselen);
 
-    // we need to do an AGC...
-    for(int i = 0; i < baselen; i++ ) {
-      input[i] = input[i] * 10; // note: don't add gain if we don't pre-filter!
-    }
+    float32_t agc = 1.0;
+    const float32_t agc_step = 0.05;
+    const float32_t agc_target_hi = 0.5;
+    const float32_t agc_target_low = 0.25;
 
     arm_fir_instance_f32 i_lpf;
     arm_fir_instance_f32 q_lpf;
@@ -547,6 +547,26 @@ int main(int argc, char **argv) {
         arm_q15_to_float(&(input[sample_offset]), loopwindow,
                          SAMPLES_PER_PERIOD);
 
+	// scan for agc value. note q15_to_float normalizes an int16_t to +1.0/-1.0.
+	int above_hi = 0;
+	int above_low = 0;
+	for( int i = 0; i < SAMPLES_PER_PERIOD; i++ ) {
+	  loopwindow[i] = loopwindow[i] * agc; // compute the agc
+	  
+	  // then check if we're out of bounds
+	  if( loopwindow[i] > agc_target_low ) {
+	    above_low = 1;
+	  }
+	  if( loopwindow[i] > agc_target_hi ) {
+	    above_hi = 1;
+	  }
+	}
+	if( above_hi ) {
+	  agc = agc * (1.0-agc_step);
+	} else if( !above_low ) {
+	  agc = agc * (1.0+agc_step);
+	}
+	
         float32_t i_samps[SAMPLES_PER_PERIOD];
         float32_t q_samps[SAMPLES_PER_PERIOD];
         for (int i = 0; i < SAMPLES_PER_PERIOD; i++) {
