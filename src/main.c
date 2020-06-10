@@ -141,6 +141,10 @@ It is rather for us to be here dedicated to the great task remaining before us. 
     fclose(wav);
 }
 
+#define IIR 1
+#define FIR 0
+#define FILTER_TYPE  IIR
+
 int main(int argc, char **argv) {
     char *wave_file_name = "samples/PSK31_sample.wav";
     char *output_file_name = "filtered.wav";
@@ -195,40 +199,6 @@ int main(int argc, char **argv) {
     int samplerate = *((unsigned int *)&(wave_header[24]));
     printf("samplerate: %d\n", samplerate);
 
-#if 0    
-    // double the sampling rate through interpolation and filtering
-    baselen = baselen * 2;
-    wave_upsampled = malloc(baselen * sizeof(int16_t));
-    wave_upsampled_filtered = malloc(baselen * sizeof(int16_t));
-
-    memset(wave_upsampled, 0, baselen * sizeof(int16_t));
-    memset(wave_upsampled_filtered, 0, baselen * sizeof(int16_t));
-    samplerate = samplerate * 2;
-    *((unsigned int *)&(wave_header[24])) = samplerate;
-
-    for (int i = 0; i < baselen / 2; i++) {
-        wave_upsampled[i * 2] = wave_buffer[i];
-        wave_upsampled[i * 2 + 1] = 0;
-    }
-
-    arm_fir_instance_f32 fir;
-    arm_fir_init_f32(&fir, FIR_STAGES, fir_coefficients, fir_state,
-                     SAMPLES_PER_PERIOD);
-    for (int sample_offset = 0; sample_offset < baselen;
-         sample_offset += SAMPLES_PER_PERIOD) {
-        // Apply our bandpass filter
-        float32_t firwindow[SAMPLES_PER_PERIOD];
-        arm_q15_to_float(&(wave_upsampled[sample_offset]), firwindow,
-                         SAMPLES_PER_PERIOD);
-        static float32_t filtered_samples[SAMPLES_PER_PERIOD];
-        arm_fir_f32(&fir, firwindow, filtered_samples, SAMPLES_PER_PERIOD);
-        arm_float_to_q15(filtered_samples,
-                         &(wave_upsampled_filtered[sample_offset]),
-                         SAMPLES_PER_PERIOD);
-    }
-
-    write_wav(wave_upsampled_filtered, baselen, "upsampled_filtered.wav");
-#else
     // apply the BPF
     wave_filtered = malloc(baselen * sizeof(int16_t));
 
@@ -254,14 +224,13 @@ int main(int argc, char **argv) {
     }
 
     write_wav(wave_filtered, baselen, "bpsk_filtered.wav");
-#endif
     
     // now try to run a PLL to "lock" onto the signal
     nco_st.samplerate = (float32_t)samplerate;
     nco_st.freq = (float32_t)CARRIER_TONE;
     nco_st.phase = 0.0;
 
-#if 0    
+#if TEST_NCO    
     /////// test the NCO
     int16_t *i_int;
     int16_t *q_int;
@@ -312,12 +281,36 @@ int main(int argc, char **argv) {
     const float32_t agc_target_hi = 0.5;
     const float32_t agc_target_low = 0.25;
 
+#if FILTER_TYPE == FIR    
     arm_fir_instance_f32 i_lpf;
     arm_fir_instance_f32 q_lpf;
     arm_fir_init_f32(&i_lpf, LPF_STAGES, lpf_coefficients, i_lpf_state,
                      SAMPLES_PER_PERIOD);
     arm_fir_init_f32(&q_lpf, LPF_STAGES, lpf_coefficients, q_lpf_state,
                      SAMPLES_PER_PERIOD);
+#else
+    arm_iir_lattice_instance_f32 i_lpf;
+    arm_iir_lattice_instance_f32 q_lpf;
+#define NUMSTAGES 2
+    // derived by taking the output of the make_iir_lpf.py function and plugging it into matlab:
+    // [k,v] = tf2latc(b[],a[])
+    // order of returned value of k must be reversed
+    // order of retruned value of v must be reversed
+#if 0    
+    // 62500 hz fs, 600hz bw, order 2
+    float32_t reflection_coeff[2] = {0.9582, -0.9995};// {-0.9995, 0.9582};
+    float32_t ladder_coeff[3] = {0.0002226, 0.0008810, 0.0008899};// {0.0008899, 0.0008810, 0.0002226};
+#endif
+    // 62500 hz fs, 1000hz bw, order 2
+    float32_t reflection_coeff[2] = {0.9314, -0.9987};
+    float32_t ladder_coeff[3] = {0.0006099, 0.0023961, 0.0024349};
+    
+    arm_iir_lattice_init_f32(&i_lpf, NUMSTAGES, reflection_coeff, ladder_coeff, i_lpf_state,
+                     SAMPLES_PER_PERIOD);
+    arm_iir_lattice_init_f32(&q_lpf, NUMSTAGES, reflection_coeff, ladder_coeff, q_lpf_state,
+                     SAMPLES_PER_PERIOD);
+#endif
+    
     float32_t nco_error = 0.0;
     for (int sample_offset = 0; sample_offset < baselen;
          sample_offset += SAMPLES_PER_PERIOD) {
@@ -362,8 +355,13 @@ int main(int argc, char **argv) {
 
         static float32_t i_lpf_samples[SAMPLES_PER_PERIOD];
         static float32_t q_lpf_samples[SAMPLES_PER_PERIOD];
+#if FILTER_TYPE == FIR	
         arm_fir_f32(&i_lpf, i_mult_samps, i_lpf_samples, SAMPLES_PER_PERIOD);
         arm_fir_f32(&q_lpf, q_mult_samps, q_lpf_samples, SAMPLES_PER_PERIOD);
+#else
+        arm_iir_lattice_f32(&i_lpf, i_mult_samps, i_lpf_samples, SAMPLES_PER_PERIOD);
+        arm_iir_lattice_f32(&q_lpf, q_mult_samps, q_lpf_samples, SAMPLES_PER_PERIOD);
+#endif
 
         arm_float_to_q15(i_lpf_samples, &(i_loop[sample_offset]),
                          SAMPLES_PER_PERIOD);
@@ -378,7 +376,7 @@ int main(int argc, char **argv) {
             avg += errorwindow[i];
         }
         avg /= ((float32_t)SAMPLES_PER_PERIOD);
-        nco_error = -(avg);
+        nco_error = -(avg)/2;
         // printf("err: %0.04f\n", nco_error);
 
         static float bit_pll = 0;

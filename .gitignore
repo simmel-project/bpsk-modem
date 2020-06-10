@@ -56,3 +56,6 @@ TAGS
 .obj/
 bpsktest
 filtered.wav
+
+# emacs
+*~

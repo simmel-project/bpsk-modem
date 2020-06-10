@@ -4106,7 +4106,7 @@ void arm_rfft_fast_f32(
 
   void arm_iir_lattice_f32(
   const arm_iir_lattice_instance_f32 * S,
-  float32_t * pSrc,
+  const float32_t * pSrc,
   float32_t * pDst,
   uint32_t blockSize);
 

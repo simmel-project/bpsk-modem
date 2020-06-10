@@ -49,10 +49,10 @@ def bandpass_remez(ntaps, lowcut, highcut, fs, width):
     return taps
 
 
-taps = 16
+taps = 64
 rate = 62500
 tone = 20840
-bandwidth = 100
+bandwidth = 600
 coefficients = create_filter(rate=rate, tone=tone, bandwidth=bandwidth, taps=taps, window="hamming")
 # coefficients = bandpass_remez(taps, (1000 - bandwidth / 2), (1000 + bandwidth / 2), rate, 1.0)
 # coefficients = bandpass_kaiser(taps, (1000 - bandwidth / 2), (1000 + bandwidth / 2), rate, 1.0)
