@@ -135,38 +135,38 @@ char varcode_to_char(uint32_t c) {
 
 const char *char_to_varcode(char c) {
     switch (c) {
-        case '\x00': return "1010101011";
-        case '\x01': return "1011011011";
-        case '\x02': return "1011101101";
-        case '\x03': return "1101110111";
-        case '\x04': return "1011101011";
-        case '\x05': return "1101011111";
-        case '\x06': return "1011101111";
-        case '\x07': return "1011111101";
-        case '\x08': return "1011111111";
+        // case '\x00': return "1010101011";
+        // case '\x01': return "1011011011";
+        // case '\x02': return "1011101101";
+        // case '\x03': return "1101110111";
+        // case '\x04': return "1011101011";
+        // case '\x05': return "1101011111";
+        // case '\x06': return "1011101111";
+        // case '\x07': return "1011111101";
+        // case '\x08': return "1011111111";
         case '\x09': return "11101111";
         case '\x0A': return "11101";
         case '\x0B': return "1101101111";
         case '\x0C': return "1011011101";
         case '\x0D': return "11111";
-        case '\x0E': return "1101110101";
-        case '\x0F': return "1110101011";
-        case '\x10': return "1011110111";
-        case '\x11': return "1011110101";
-        case '\x12': return "1110101101";
-        case '\x13': return "1110101111";
-        case '\x14': return "1101011011";
-        case '\x15': return "1101101011";
-        case '\x16': return "1101101101";
-        case '\x17': return "1101010111";
-        case '\x18': return "1101111011";
-        case '\x19': return "1101111101";
-        case '\x1A': return "1110110111";
-        case '\x1B': return "1101010101";
-        case '\x1C': return "1101011101";
-        case '\x1D': return "1110111011";
-        case '\x1E': return "1011111011";
-        case '\x1F': return "1101111111";
+        // case '\x0E': return "1101110101";
+        // case '\x0F': return "1110101011";
+        // case '\x10': return "1011110111";
+        // case '\x11': return "1011110101";
+        // case '\x12': return "1110101101";
+        // case '\x13': return "1110101111";
+        // case '\x14': return "1101011011";
+        // case '\x15': return "1101101011";
+        // case '\x16': return "1101101101";
+        // case '\x17': return "1101010111";
+        // case '\x18': return "1101111011";
+        // case '\x19': return "1101111101";
+        // case '\x1A': return "1110110111";
+        // case '\x1B': return "1101010101";
+        // case '\x1C': return "1101011101";
+        // case '\x1D': return "1110111011";
+        // case '\x1E': return "1011111011";
+        // case '\x1F': return "1101111111";
         case ' ': return "1";
         case '!': return "111111111";
         case '"': return "101011111";
@@ -262,7 +262,7 @@ const char *char_to_varcode(char c) {
         case '|': return "110111011";
         case '}': return "1010110101";
         case '~': return "1011010111";
-        case '\x7F': return "1110110101";
+        // case '\x7F': return "1110110101";
     }
     return "";
 }
