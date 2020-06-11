@@ -104,21 +104,41 @@ void nco(float32_t control, uint32_t timestep, float32_t *i, float32_t *q) {
             nco_st.phase);
 }
 
+static int byte_count = 0;
 static void append_wav(void *arg, void *data, unsigned int count) {
     // printf("%p %p %ud\n", )
     // printf("write %d count %u\n", ((int16_t *)data)[0], count);
+    byte_count += count;
     fwrite(data, count, 1, arg);
 }
 
-static void modulate(char *filename) {
+static void modulate(const char *src_txt, const char *dest_wav) {
+    struct stat statbuf;
     struct modulate_state state;
-    FILE *wav = fopen(filename, "wb+");
+    FILE *wav = fopen(dest_wav, "wb+");
+
+    int fd = open(src_txt, O_RDONLY);
+    if (-1 == fd) {
+        perror("unable to open source text file");
+        exit(1);
+    }
+    if (-1 == fstat(fd, &statbuf)) {
+        perror("unable to determine size of buffer");
+        exit(1);
+    }
+    char *txt_file = malloc(statbuf.st_size + 1);
+    memset(txt_file, 0, statbuf.st_size);
+
+    if (read(fd, txt_file, statbuf.st_size) != statbuf.st_size) {
+        fprintf(stderr, "couldn't read source text file");
+    }
+    close(fd);
 
     static uint8_t wav_header[44] = {
         0x52, 0x49, 0x46, 0x46, 0x1c, 0x12, 0x05, 0x00, 0x57, 0x41, 0x56,
         0x45, 0x66, 0x6d, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x01, 0x00,
         0x01, 0x00, 0x11, 0x2b, 0x00, 0x00, 0x22, 0x56, 0x00, 0x00, 0x02,
-        0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0xf8, 0x11, 0x05, 0x00,
+        0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00,
     };
     uint32_t rate = SAMPLE_RATE;
     uint32_t tone = CARRIER_TONE; // rate / 3;
@@ -127,32 +147,24 @@ static void modulate(char *filename) {
     fwrite(wav_header, sizeof(wav_header), 1, wav);
 
     modulate_init(&state, tone, rate, 1.0 /* unimplemented */, append_wav, wav);
-    modulate_string(&state, "\
-Four score and seven years ago, our fathers brought forth on this continent a new nation: conceived in liberty, and dedicated to the proposition that all men are created equal.\
-\n\
-Now we are engaged in a great civil war. . .testing whether that nation, or any nation so conceived and so dedicated. . . can long endure. We are met on a great battlefield of that war.\
-\n\
-We have come to dedicate a portion of that field as a final resting place for those who here gave their lives that that nation might live. It is altogether fitting and proper that we should do this.\
-\n\
-But, in a larger sense, we cannot dedicate. . .we cannot consecrate. . . we cannot hallow this ground. The brave men, living and dead, who struggled here have consecrated it, far above our poor power to add or detract. The world will little note, nor long remember, what we say here, but it can never forget what they did here. It is for us the living, rather, to be dedicated here to the unfinished work which they who fought here have thus far so nobly advanced.\
-\n\
-It is rather for us to be here dedicated to the great task remaining before us. . .that from these honored dead we take increased devotion to that cause for which they gave the last full measure of devotion. . . that we here highly resolve that these dead shall not have died in vain. . . that this nation, under God, shall have a new birth of freedom. . . and that government of the people. . .by the people. . .for the people. . . shall not perish from the earth.\
-\n");
+    modulate_string(&state, txt_file);
+    fseek(wav, 40, SEEK_SET);
+    fwrite(&byte_count, 4, 1, wav); // Update the chunk byte count
     fclose(wav);
+    free(txt_file);
 }
 
 int main(int argc, char **argv) {
     char *wave_file_name = "samples/PSK31_sample.wav";
     char *output_file_name = "filtered.wav";
+    char *source_txt_file_name = "to-be-modulated.txt";
     struct stat statbuf;
     int16_t *wave_buffer;
     int16_t *wave_filtered;
-    int16_t *wave_upsampled;
-    int16_t *wave_upsampled_filtered;
 
     if (1) {
         wave_file_name = "modulated.wav";
-        modulate(wave_file_name);
+        modulate(source_txt_file_name, wave_file_name);
     }
 
     if (argc > 1) {
@@ -294,7 +306,7 @@ int main(int argc, char **argv) {
     uint32_t length = *((uint32_t *)&(wave_header[40]));
     *((uint32_t *)&(wave_header[40])) =
         length * 2;
-    printf("wave length: %d\n");
+    printf("wave length: %d\n", length * 2);
 #endif
 
     // multiply the NCO output times input signal
