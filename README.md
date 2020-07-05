@@ -1,3 +1,6 @@
+# Intro
+This repo contains a software simulation of the BPSK link. It was used to originally develop and refine the parameters of the BPSK modem prior to porting to the `playground` repo. Subsequent to link confirmation in the `playground`, the constituent repositories were organized into the `nus-link` repo. Thus, there is significant "drift" between what is in this repo and what went to production, but this repo is still quite handy for retrenching fundamental parameters about the link.
+
 ## Creating the FIR Filter
 
 The FIR filter was created in Python using the `scipy.signal` module:
