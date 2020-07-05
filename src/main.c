@@ -12,8 +12,8 @@
 #include "modulate.h"
 
 #define SAMPLE_RATE 62500
-#define CARRIER_TONE 20840
-#define BAUD_RATE (651.0f) // 31.25
+#define CARRIER_TONE 20833.33f
+#define BAUD_RATE (651.0417f) // 31.25
 #define PLL_INCR (BAUD_RATE / (float)(SAMPLE_RATE))
 
 #define SAMPLES_PER_PERIOD 20 // Must evenly divide CARRIER_TONE
