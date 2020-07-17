@@ -26,6 +26,7 @@ void modulate_init(struct modulate_state *state, uint32_t carrier,
 static void send_bit(struct modulate_state *state, int bit) {
     int16_t low = -32768/4;
     int16_t high = 32767/4;
+    int16_t zero = 0;
     int sign = 1;
 
     printf("%d", bit);
@@ -53,12 +54,16 @@ static void send_bit(struct modulate_state *state, int bit) {
         state->cfg.write(state->cfg.write_arg, &num, sizeof(num));
         state->bit_pll += state->cfg.omega;
 #else
-        if (state->baud_pll > 0.5) {
-            // printf("writing high %d: @ %p ", high, &high);
-            state->cfg.write(state->cfg.write_arg, &high, sizeof(high));
-        } else {
-            // printf("writing low %d: @ %p ", low, &low);
+        if (state->baud_pll > ((float)11/12)) {
+            state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
+        } else if (state->baud_pll > ((float)7/12)) {
             state->cfg.write(state->cfg.write_arg, &low, sizeof(low));
+        } else if (state->baud_pll > ((float)5/12)) {
+            state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
+        } else if (state->baud_pll > ((float)1/12)) {
+            state->cfg.write(state->cfg.write_arg, &high, sizeof(high));
+	} else {
+            state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
         }
 #endif
         state->baud_pll += state->cfg.pll_incr;
