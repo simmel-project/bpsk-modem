@@ -27,10 +27,18 @@ static void send_bit(struct modulate_state *state, int bit) {
     int16_t low = -32768/4;
     int16_t high = 32767/4;
     int16_t zero = 0;
+    int16_t w_low;
+    int16_t w_high;
     int sign = 1;
+    float amplitude;
+    int sign_change;
 
     printf("%d", bit);
 
+    if (bit == 0)
+      sign_change = (1==1); 
+    else
+      sign_change = (1==0);
     state->polarity ^= !bit;
     if (state->polarity) {
         sign = -1;
@@ -40,38 +48,38 @@ static void send_bit(struct modulate_state *state, int bit) {
 
     int bit_count = 0;
 
-// #define SINE_MODE
-
-    // Resetting these greatly helps demodulation when in SINE mode
-#ifdef SINE_MODE
-    state->bit_pll = 0;
-    state->baud_pll = 0;
-#endif
-
     while (bit_count < 32) {
-#ifdef SINE_MODE
-        int16_t num = cosf(state->bit_pll) * sign * 32767;
-        state->cfg.write(state->cfg.write_arg, &num, sizeof(num));
-        state->bit_pll += state->cfg.omega;
-#else
+	if(!sign_change)
+	  amplitude = -1.0;
+	else{
+	  if(bit_count == 16)
+		  state->baud_pll += 0.5;
+	  if(bit_count < 16)
+	    amplitude =  sqrtf( ( cosf(M_PI * bit_count / 16) + 1) / 2);
+	  else
+	    amplitude = -sqrtf( ( cosf(M_PI * bit_count / 16) + 1) / 2);
+	}
+	w_low = low * amplitude;
+	w_high = high * amplitude;
         if (state->baud_pll > ((float)11/12)) {
             state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
         } else if (state->baud_pll > ((float)7/12)) {
-            state->cfg.write(state->cfg.write_arg, &low, sizeof(low));
+            state->cfg.write(state->cfg.write_arg, &w_low, sizeof(low));
         } else if (state->baud_pll > ((float)5/12)) {
             state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
         } else if (state->baud_pll > ((float)1/12)) {
-            state->cfg.write(state->cfg.write_arg, &high, sizeof(high));
+            state->cfg.write(state->cfg.write_arg, &w_high, sizeof(high));
 	} else {
             state->cfg.write(state->cfg.write_arg, &zero, sizeof(zero));
         }
-#endif
         state->baud_pll += state->cfg.pll_incr;
         if (state->baud_pll > 1.0) {
             bit_count++;
             state->baud_pll -= 1.0;
         }
     }
+//    if(sign_change)
+//      state->baud_pll += 0.5;
 }
 
 void modulate_string(struct modulate_state *state, const char *string) {
